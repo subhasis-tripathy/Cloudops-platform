@@ -1,0 +1,5 @@
+name: Globals
+values:
+  - key: Test Auth
+    enabled: true
+    secret: true
