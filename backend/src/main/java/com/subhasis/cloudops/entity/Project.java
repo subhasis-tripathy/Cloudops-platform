@@ -21,6 +21,10 @@ public class Project {
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
     public Long getId() { return id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -29,4 +33,6 @@ public class Project {
     public ProjectStatus getStatus() { return status; }
     public void setStatus(ProjectStatus status) { this.status = status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public User getOwner() { return owner; }
+    public void setOwner(User owner) { this.owner = owner; }
 }
