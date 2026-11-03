@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend build and test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cloudops
+          POSTGRES_PASSWORD: cloudops123
+          POSTGRES_DB: cloudops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cloudops -d cloudops"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudops
+      SPRING_DATASOURCE_USERNAME: cloudops
+      SPRING_DATASOURCE_PASSWORD: cloudops123
+      # Dummy value used only by CI tests. Real secrets never go in this file.
+      JWT_SECRET: Y2ktb25seS1kdW1teS1zZWNyZXQtbm90LWZvci1wcm9kLTAxMjM0NTY3ODk=
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build and test
+        run: mvn -B verify
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: backend/target/surefire-reports
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  docker:
+    name: Build and push images
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lowercase the owner name (registry requires lowercase)
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ env.OWNER }}/cloudops-backend:latest
+            ghcr.io/${{ env.OWNER }}/cloudops-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ env.OWNER }}/cloudops-frontend:latest
+            ghcr.io/${{ env.OWNER }}/cloudops-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

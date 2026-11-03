@@ -1,0 +1,50 @@
+# Run everything with:  docker compose up --build
+# Needs a .env file next to this one (copy .env.example and fill it in).
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: cloudops
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cloudops123}
+      POSTGRES_DB: cloudops
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudops -d cloudops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # No "ports" on purpose: only the backend, on the internal network, needs the database.
+
+  backend:
+    build: ./backend
+    environment:
+      # "db" is the service name above. Docker's internal DNS resolves it to the container.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/cloudops
+      SPRING_DATASOURCE_USERNAME: cloudops
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-cloudops123}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the .env file}
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:3000
+      TZ: UTC
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8080
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
