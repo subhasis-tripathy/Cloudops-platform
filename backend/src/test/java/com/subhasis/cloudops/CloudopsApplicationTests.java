@@ -1,13 +1,11 @@
 package com.subhasis.cloudops;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class CloudopsApplicationTests {
+class CloudopsApplicationTests extends AbstractIntegrationTest {
 
-	@Test
-	void contextLoads() {
-	}
-
+    @Test
+    void contextLoads() {
+        // Passes if the whole application (security, JPA, JWT) starts correctly
+    }
 }
